@@ -1,0 +1,22 @@
+{
+  "name": "ts",
+  "version": "1.0.0",
+  "description": "A simple unix timestamp converter written in nodejs",
+  "main": "ts.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klinquist/ts.git"
+  },
+  "author": "Kris Linquist <kris@linquist.net>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/klinquist/ts/issues"
+  },
+  "bin": {
+    "ts": "./ts.js"
+  },
+  "homepage": "https://github.com/klinquist/ts#readme"
+}
