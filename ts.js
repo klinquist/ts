@@ -2,12 +2,15 @@
 var ts = process.argv[2];
 
 const timeConverter = UNIX_timestamp => {
-    if (!UNIX_timestamp.match(/^\d{10,13}$/g)) {
-        console.log('10 or 13 digit timestamp expected.');
+    if (!UNIX_timestamp.match(/^(\d{10}|\d{13}|\d{19})$/g)) {
+        console.log('10, 13, or 19 digit timestamp expected. This was ' + UNIX_timestamp.length + ' characters long.');
         process.exit(1);
     }
     if (UNIX_timestamp.length == 10) {
         UNIX_timestamp += '000';
+    }
+    if (UNIX_timestamp.length == 19) {
+        UNIX_timestamp = UNIX_timestamp.substr(0,13);
     }
     var a = new Date(parseInt(UNIX_timestamp));
     var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
