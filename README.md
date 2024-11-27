@@ -19,3 +19,6 @@ UTC ISO timestamp: 2018-01-05T18:05:13.088Z
 ```
 
 
+
+
+`ts yyyy-mm-dd h:mma` also works.
