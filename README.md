@@ -14,7 +14,7 @@ This is a simple command line timestamp converter supporting Unix timestamps, IS
 ├─────────────────────┼─────────────────────────────────────┤
 │ Unix (seconds)      │ 1515176243                          │
 │ Unix (milliseconds) │ 1515176243049                       │
-│ ISO timestamp       │ 2018-01-05T18:05:13.088Z           │
+│ ISO timestamp       │ 2018-01-05T18:05:13.088Z            │
 └─────────────────────┴─────────────────────────────────────┘
 ```
 
@@ -27,9 +27,9 @@ ts 1515176243
 ┌─────────────────────┬─────────────────────────────────────┐
 │ Format              │ Value                               │
 ├─────────────────────┼─────────────────────────────────────┤
-│ America/Los_Angeles │ Jan 5, 2018, 10:05:13 AM           │
-│ UTC ISO timestamp   │ 2018-01-05T18:05:13.000Z           │
-│ Time difference     │ 7 years, 6 months ago              │
+│ America/Los_Angeles │ Jan 5, 2018, 10:05:13 AM            │
+│ UTC ISO timestamp   │ 2018-01-05T18:05:13.000Z            │
+│ Time difference     │ 7 years, 6 months ago               │
 └─────────────────────┴─────────────────────────────────────┘
 ```
 
@@ -44,8 +44,8 @@ ts 2018-01-05T18:05:13.088Z
 ├─────────────────────┼─────────────────────────────────────┤
 │ Unix (seconds)      │ 1515176713                          │
 │ Unix (milliseconds) │ 1515176713088                       │
-│ UTC ISO timestamp   │ 2018-01-05T18:05:13.088Z           │
-│ Time difference     │ 7 years, 6 months ago              │
+│ UTC ISO timestamp   │ 2018-01-05T18:05:13.088Z            │
+│ Time difference     │ 7 years, 6 months ago               │
 └─────────────────────┴─────────────────────────────────────┘
 ```
 
@@ -60,8 +60,8 @@ ts "2018-01-05 10:05am"
 ├─────────────────────┼─────────────────────────────────────┤
 │ Unix (seconds)      │ 1515176700                          │
 │ Unix (milliseconds) │ 1515176700000                       │
-│ UTC ISO timestamp   │ 2018-01-05T18:05:00.000Z           │
-│ Time difference     │ 7 years, 6 months ago              │
+│ UTC ISO timestamp   │ 2018-01-05T18:05:00.000Z            │
+│ Time difference     │ 7 years, 6 months ago               │
 └─────────────────────┴─────────────────────────────────────┘
 ```
 
@@ -74,8 +74,8 @@ ts "2018-01-05 10:05am" --tz America/New_York
 ├─────────────────────┼─────────────────────────────────────┤
 │ Unix (seconds)      │ 1515168300                          │
 │ Unix (milliseconds) │ 1515168300000                       │
-│ UTC ISO timestamp   │ 2018-01-05T16:05:00.000Z           │
-│ Time difference     │ 7 years, 6 months ago              │
+│ UTC ISO timestamp   │ 2018-01-05T16:05:00.000Z            │
+│ Time difference     │ 7 years, 6 months ago               │
 └─────────────────────┴─────────────────────────────────────┘
 ```
 
@@ -113,10 +113,46 @@ ts 1515176243 --tz America/New_York
 ┌─────────────────────┬─────────────────────────────────────┐
 │ Format              │ Value                               │
 ├─────────────────────┼─────────────────────────────────────┤
-│ America/New_York    │ Jan 5, 2018, 01:05:13 PM           │
-│ UTC ISO timestamp   │ 2018-01-05T18:05:13.000Z           │
-│ Time difference     │ 7 years, 6 months ago              │
+│ America/New_York    │ Jan 5, 2018, 01:05:13 PM            │
+│ UTC ISO timestamp   │ 2018-01-05T18:05:13.000Z            │
+│ Time difference     │ 7 years, 6 months ago               │
 └─────────────────────┴─────────────────────────────────────┘
+```
+
+### JSON Output
+
+Use `--output json` to get structured JSON output instead of a table. This works for all input types, including current time, timestamps, date strings, and relative time.
+
+```
+ts 1705123456 --output json
+{
+  "unixSeconds": 1705123456,
+  "unixMilliseconds": 1705123456000,
+  "utcISO": "2024-01-13T10:30:56.000Z",
+  "localTime": "Jan 13, 2024, 2:30:56 AM",
+  "timezone": "America/Los_Angeles",
+  "timeDifference": "X days ago"
+}
+```
+
+If you run just `ts --output json`, you get the current time as JSON:
+
+```
+ts --output json
+{
+  "unixSeconds": 1753797711,
+  "unixMilliseconds": 1753797711352,
+  "utcISO": "2025-07-29T14:01:51.352Z"
+}
+```
+
+If there is an error, you get a JSON error object:
+
+```
+ts not-a-timestamp --output json
+{
+  "error": "Invalid date string or timestamp."
+}
 ```
 
 ### Time Difference Feature
@@ -142,22 +178,29 @@ All timestamp conversions now include a human-readable time difference:
 # Current time
 ts
 
+ts --output json
+
 # Unix timestamp conversion
 ts 1515176243
+ts 1515176243 --output json
 
 # ISO timestamp conversion
 ts 2018-01-05T18:05:13.088Z
+ts 2018-01-05T18:05:13.088Z --output json
 
 # Date string conversion
 ts "2018-01-05 10:05am"
+ts "2018-01-05 10:05am" --output json
 
 # Relative time calculations
 ts +1day
+ts +1day --output json
 ts -2hours
 ts +1month
 ts -1year
 
 # With timezone
 ts 1515176243 --tz America/New_York
+ts 1515176243 --tz America/New_York --output json
 ts "2018-01-05 10:05am" --tz America/New_York
 ```

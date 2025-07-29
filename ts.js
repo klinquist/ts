@@ -2,18 +2,33 @@
 
 let ts = process.argv[2];
 let timezone = null;
+let outputFormat = "table";
+
+// Check for output format flag
+const outputIndex = process.argv.indexOf("--output");
+if (outputIndex !== -1 && process.argv[outputIndex + 1]) {
+  outputFormat = process.argv[outputIndex + 1];
+}
 
 // Check for timezone flag
 const tzIndex = process.argv.indexOf("--tz");
 if (tzIndex !== -1 && process.argv[tzIndex + 1]) {
   timezone = process.argv[tzIndex + 1];
-  // Remove timezone args from input
-  const args = process.argv.slice(2);
-  args.splice(tzIndex - 2, 2);
-  ts = args.length > 0 ? args.join(" ") : null;
-} else if (process.argv[3] && !process.argv[3].startsWith("--")) {
-  ts = process.argv.slice(2).join(" ");
 }
+
+// Extract the actual input by removing flags and their values
+const args = process.argv.slice(2);
+const filteredArgs = [];
+
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === "--output" || args[i] === "--tz") {
+    i++; // Skip the flag value
+  } else {
+    filteredArgs.push(args[i]);
+  }
+}
+
+ts = filteredArgs.length > 0 ? filteredArgs.join(" ") : null;
 
 const isUnixTimestamp = (input) => /^\d{10,19}$/.test(input);
 const isISOTimestamp = (input) =>
@@ -239,11 +254,27 @@ const parseISOTimestamp = (input) => {
   };
 };
 
-const parseInput = (input, tz = null) => {
+const parseInput = (input, tz = null, format = "table") => {
   if (isUnixTimestamp(input)) {
     const { localTime, utcISO, timezone } = formatUnixTimestamp(input, tz);
     const msTimestamp = input.padEnd(13, "0").slice(0, 13);
     const timeDiff = getTimeDifference(Number(msTimestamp));
+
+    if (format === "json") {
+      return JSON.stringify(
+        {
+          unixSeconds: Math.floor(Number(msTimestamp) / 1000),
+          unixMilliseconds: Number(msTimestamp),
+          utcISO,
+          localTime,
+          timezone,
+          timeDifference: timeDiff,
+        },
+        null,
+        2
+      );
+    }
+
     let output =
       "┌─────────────────────┬─────────────────────────────────────┐\n";
     output += "│ Format              │ Value                               │\n";
@@ -257,6 +288,20 @@ const parseInput = (input, tz = null) => {
   if (isISOTimestamp(input)) {
     const { unixSeconds, unixMilliseconds, utcISO } = parseISOTimestamp(input);
     const timeDiff = getTimeDifference(unixMilliseconds);
+
+    if (format === "json") {
+      return JSON.stringify(
+        {
+          unixSeconds,
+          unixMilliseconds,
+          utcISO,
+          timeDifference: timeDiff,
+        },
+        null,
+        2
+      );
+    }
+
     let output =
       "┌─────────────────────┬─────────────────────────────────────┐\n";
     output += "│ Format              │ Value                               │\n";
@@ -275,6 +320,20 @@ const parseInput = (input, tz = null) => {
   if (isRelativeTime(input)) {
     const { unixSeconds, unixMilliseconds, utcISO } = parseRelativeTime(input);
     const timeDiff = getTimeDifference(unixMilliseconds);
+
+    if (format === "json") {
+      return JSON.stringify(
+        {
+          unixSeconds,
+          unixMilliseconds,
+          utcISO,
+          timeDifference: timeDiff,
+        },
+        null,
+        2
+      );
+    }
+
     let output =
       "┌─────────────────────┬─────────────────────────────────────┐\n";
     output += "│ Format              │ Value                               │\n";
@@ -292,6 +351,20 @@ const parseInput = (input, tz = null) => {
   }
   const { unixSeconds, unixMilliseconds, utcISO } = parseDateString(input, tz);
   const timeDiff = getTimeDifference(unixMilliseconds);
+
+  if (format === "json") {
+    return JSON.stringify(
+      {
+        unixSeconds,
+        unixMilliseconds,
+        utcISO,
+        timeDifference: timeDiff,
+      },
+      null,
+      2
+    );
+  }
+
   let output =
     "┌─────────────────────┬─────────────────────────────────────┐\n";
   output += "│ Format              │ Value                               │\n";
@@ -308,71 +381,176 @@ const parseInput = (input, tz = null) => {
 
 try {
   if (!ts) {
+    if (outputFormat === "json") {
+      const now = Date.now();
+      const currentDate = new Date(now);
+      const targetTz =
+        timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+      const result = {
+        unixSeconds: Math.floor(now / 1000),
+        unixMilliseconds: now,
+        utcISO: currentDate.toISOString(),
+      };
+
+      if (timezone) {
+        const tzTime = currentDate.toLocaleString("en-US", {
+          timeZone: targetTz,
+        });
+        result.localTime = tzTime;
+        result.timezone = targetTz;
+      }
+
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(
+        'Usage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--output json]'
+      );
+      console.log("Examples:");
+      console.log("  ts                          # Show current time");
+      console.log("  ts 1705123456               # Convert Unix timestamp");
+      console.log("  ts 2024-01-13T10:30:00Z     # Convert ISO timestamp");
+      console.log(
+        '  ts "2024-01-13 10:30am"     # Convert date string (local timezone)'
+      );
+      console.log("  ts 1705123456 --tz UTC      # Convert with timezone");
+      console.log("  ts +1day                    # Add 1 day to current time");
+      console.log(
+        "  ts -2hours                  # Subtract 2 hours from current time"
+      );
+      console.log("  ts 1705123456 --output json # Output as JSON");
+      console.log("");
+      const now = Date.now();
+      const currentDate = new Date(now);
+      const targetTz =
+        timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      console.log(
+        "┌─────────────────────┬─────────────────────────────────────┐"
+      );
+      console.log(
+        "│ Format              │ Current Time                        │"
+      );
+      console.log(
+        "├─────────────────────┼─────────────────────────────────────┤"
+      );
+      console.log(
+        `│ Unix (seconds)      │ ${Math.floor(now / 1000)
+          .toString()
+          .padEnd(35)} │`
+      );
+      console.log(`│ Unix (milliseconds) │ ${now.toString().padEnd(35)} │`);
+      console.log(
+        `│ ISO timestamp       │ ${currentDate.toISOString().padEnd(35)} │`
+      );
+      if (timezone) {
+        const tzTime = currentDate.toLocaleString("en-US", {
+          timeZone: targetTz,
+        });
+        console.log(`│ ${targetTz.padEnd(19)} │ ${tzTime.padEnd(35)} │`);
+      }
+      console.log(
+        "└─────────────────────┴─────────────────────────────────────┘"
+      );
+    }
+  } else {
+    if (ts && ts.trim()) {
+      console.log(parseInput(ts, timezone, outputFormat));
+    } else {
+      if (outputFormat === "json") {
+        const now = Date.now();
+        const currentDate = new Date(now);
+        const targetTz =
+          timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        const result = {
+          unixSeconds: Math.floor(now / 1000),
+          unixMilliseconds: now,
+          utcISO: currentDate.toISOString(),
+        };
+
+        if (timezone) {
+          const tzTime = currentDate.toLocaleString("en-US", {
+            timeZone: targetTz,
+          });
+          result.localTime = tzTime;
+          result.timezone = targetTz;
+        }
+
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(
+          'Usage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--output json]'
+        );
+        console.log("Examples:");
+        console.log("  ts                          # Show current time");
+        console.log("  ts 1705123456               # Convert Unix timestamp");
+        console.log("  ts 2024-01-13T10:30:00Z     # Convert ISO timestamp");
+        console.log(
+          '  ts "2024-01-13 10:30am"     # Convert date string (local timezone)'
+        );
+        console.log("  ts 1705123456 --tz UTC      # Convert with timezone");
+        console.log(
+          "  ts +1day                    # Add 1 day to current time"
+        );
+        console.log(
+          "  ts -2hours                  # Subtract 2 hours from current time"
+        );
+        console.log("  ts 1705123456 --output json # Output as JSON");
+        console.log("");
+        const now = Date.now();
+        const currentDate = new Date(now);
+        const targetTz =
+          timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        console.log(
+          "┌─────────────────────┬─────────────────────────────────────┐"
+        );
+        console.log(
+          "│ Format              │ Current Time                        │"
+        );
+        console.log(
+          "├─────────────────────┼─────────────────────────────────────┤"
+        );
+        console.log(
+          `│ Unix (seconds)      │ ${Math.floor(now / 1000)
+            .toString()
+            .padEnd(35)} │`
+        );
+        console.log(`│ Unix (milliseconds) │ ${now.toString().padEnd(35)} │`);
+        console.log(
+          `│ ISO timestamp       │ ${currentDate.toISOString().padEnd(35)} │`
+        );
+        if (timezone) {
+          const tzTime = currentDate.toLocaleString("en-US", {
+            timeZone: targetTz,
+          });
+          console.log(`│ ${targetTz.padEnd(19)} │ ${tzTime.padEnd(35)} │`);
+        }
+        console.log(
+          "└─────────────────────┴─────────────────────────────────────┘"
+        );
+      }
+    }
+  }
+} catch (error) {
+  if (outputFormat === "json") {
+    console.error(JSON.stringify({ error: error.message }, null, 2));
+  } else {
+    console.error(`Error: ${error.message}`);
     console.log(
-      'Usage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone]'
+      '\nUsage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--output json]'
     );
     console.log("Examples:");
-    console.log("  ts                          # Show current time");
+    console.log("  ts                           # Show current time");
     console.log("  ts 1705123456               # Convert Unix timestamp");
     console.log("  ts 2024-01-13T10:30:00Z     # Convert ISO timestamp");
     console.log(
       '  ts "2024-01-13 10:30am"     # Convert date string (local timezone)'
     );
     console.log("  ts 1705123456 --tz UTC      # Convert with timezone");
-    console.log("  ts +1day                    # Add 1 day to current time");
+    console.log("  ts +1day                     # Add 1 day to current time");
     console.log(
-      "  ts -2hours                  # Subtract 2 hours from current time"
+      "  ts -2hours                   # Subtract 2 hours from current time"
     );
-    console.log("");
-    const now = Date.now();
-    const currentDate = new Date(now);
-    const targetTz =
-      timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-    console.log(
-      "┌─────────────────────┬─────────────────────────────────────┐"
-    );
-    console.log(
-      "│ Format              │ Current Time                        │"
-    );
-    console.log(
-      "├─────────────────────┼─────────────────────────────────────┤"
-    );
-    console.log(
-      `│ Unix (seconds)      │ ${Math.floor(now / 1000)
-        .toString()
-        .padEnd(35)} │`
-    );
-    console.log(`│ Unix (milliseconds) │ ${now.toString().padEnd(35)} │`);
-    console.log(
-      `│ ISO timestamp       │ ${currentDate.toISOString().padEnd(35)} │`
-    );
-    if (timezone) {
-      const tzTime = currentDate.toLocaleString("en-US", {
-        timeZone: targetTz,
-      });
-      console.log(`│ ${targetTz.padEnd(19)} │ ${tzTime.padEnd(35)} │`);
-    }
-    console.log(
-      "└─────────────────────┴─────────────────────────────────────┘"
-    );
-  } else {
-    console.log(parseInput(ts, timezone));
+    console.log("  ts 1705123456 --output json # Output as JSON");
   }
-} catch (error) {
-  console.error(`Error: ${error.message}`);
-  console.log(
-    '\nUsage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone]'
-  );
-  console.log("Examples:");
-  console.log("  ts                           # Show current time");
-  console.log("  ts 1705123456               # Convert Unix timestamp");
-  console.log("  ts 2024-01-13T10:30:00Z     # Convert ISO timestamp");
-  console.log(
-    '  ts "2024-01-13 10:30am"     # Convert date string (local timezone)'
-  );
-  console.log("  ts 1705123456 --tz UTC      # Convert with timezone");
-  console.log("  ts +1day                     # Add 1 day to current time");
-  console.log(
-    "  ts -2hours                   # Subtract 2 hours from current time"
-  );
 }
