@@ -10,10 +10,25 @@ if (outputIndex !== -1 && process.argv[outputIndex + 1]) {
   outputFormat = process.argv[outputIndex + 1];
 }
 
-// Check for timezone flag
+// Check for timezone flag (will process after functions are defined)
 const tzIndex = process.argv.indexOf("--tz");
 if (tzIndex !== -1 && process.argv[tzIndex + 1]) {
-  timezone = process.argv[tzIndex + 1];
+  timezone = process.argv[tzIndex + 1]; // Store raw input for now
+}
+
+// Check for list-timezones flag
+if (process.argv.includes("--list-timezones")) {
+  const availableTimezones = Intl.supportedValuesOf('timeZone');
+  console.log("Available timezones:");
+  console.log("====================");
+  console.log("\nCommon shortcuts:");
+  console.log("  pacific, central, mountain, eastern");
+  console.log("  pst, cst, mst, est");
+  console.log("  utc, gmt");
+  console.log("  Common cities: denver, chicago, nyc, la, london, paris, tokyo, etc.");
+  console.log("\nFull IANA timezone list:");
+  availableTimezones.forEach(tz => console.log(`  ${tz}`));
+  process.exit(0);
 }
 
 // Extract the actual input by removing flags and their values
@@ -23,6 +38,8 @@ const filteredArgs = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--output" || args[i] === "--tz") {
     i++; // Skip the flag value
+  } else if (args[i] === "--list-timezones") {
+    // Skip this flag (no value)
   } else {
     filteredArgs.push(args[i]);
   }
@@ -141,6 +158,163 @@ const getTimeZoneOffset = (timeZone, date = new Date()) => {
   const localTime = date.getTime();
   const tzDate = new Date(date.toLocaleString("en-US", { timeZone }));
   return (localTime - tzDate.getTime()) / 60000; // Offset in minutes
+};
+
+const findTimezone = (input) => {
+  if (!input) return null;
+  
+  // Get all available timezones
+  const availableTimezones = Intl.supportedValuesOf('timeZone');
+  
+  // Common city/region mappings for fuzzy matching
+  const cityMappings = {
+    // US Timezone abbreviations and names
+    'pacific': 'America/Los_Angeles',
+    'central': 'America/Chicago',
+    'mountain': 'America/Denver', 
+    'eastern': 'America/New_York',
+    'est': 'America/New_York',
+    'cst': 'America/Chicago', 
+    'mst': 'America/Denver',
+    'pst': 'America/Los_Angeles',
+    
+    // North America cities
+    'denver': 'America/Denver',
+    'chicago': 'America/Chicago',
+    'new york': 'America/New_York',
+    'newyork': 'America/New_York',
+    'nyc': 'America/New_York',
+    'la': 'America/Los_Angeles',
+    'los angeles': 'America/Los_Angeles',
+    'losangeles': 'America/Los_Angeles',
+    'sf': 'America/Los_Angeles',
+    'san francisco': 'America/Los_Angeles',
+    'sanfrancisco': 'America/Los_Angeles',
+    'seattle': 'America/Los_Angeles',
+    'phoenix': 'America/Phoenix',
+    'vegas': 'America/Los_Angeles',
+    'las vegas': 'America/Los_Angeles',
+    'lasvegas': 'America/Los_Angeles',
+    'miami': 'America/New_York',
+    'atlanta': 'America/New_York',
+    'boston': 'America/New_York',
+    'toronto': 'America/Toronto',
+    'vancouver': 'America/Vancouver',
+    'montreal': 'America/Montreal',
+    'mexico city': 'America/Mexico_City',
+    'mexicocity': 'America/Mexico_City',
+    
+    // Europe
+    'london': 'Europe/London',
+    'paris': 'Europe/Paris',
+    'berlin': 'Europe/Berlin',
+    'rome': 'Europe/Rome',
+    'madrid': 'Europe/Madrid',
+    'amsterdam': 'Europe/Amsterdam',
+    'brussels': 'Europe/Brussels',
+    'vienna': 'Europe/Vienna',
+    'zurich': 'Europe/Zurich',
+    'stockholm': 'Europe/Stockholm',
+    'oslo': 'Europe/Oslo',
+    'copenhagen': 'Europe/Copenhagen',
+    'helsinki': 'Europe/Helsinki',
+    'moscow': 'Europe/Moscow',
+    'istanbul': 'Europe/Istanbul',
+    'athens': 'Europe/Athens',
+    'prague': 'Europe/Prague',
+    'budapest': 'Europe/Budapest',
+    'warsaw': 'Europe/Warsaw',
+    
+    // Asia
+    'tokyo': 'Asia/Tokyo',
+    'beijing': 'Asia/Shanghai',
+    'shanghai': 'Asia/Shanghai',
+    'hong kong': 'Asia/Hong_Kong',
+    'hongkong': 'Asia/Hong_Kong',
+    'singapore': 'Asia/Singapore',
+    'seoul': 'Asia/Seoul',
+    'mumbai': 'Asia/Kolkata',
+    'delhi': 'Asia/Kolkata',
+    'kolkata': 'Asia/Kolkata',
+    'calcutta': 'Asia/Kolkata',
+    'bangkok': 'Asia/Bangkok',
+    'jakarta': 'Asia/Jakarta',
+    'manila': 'Asia/Manila',
+    'kuala lumpur': 'Asia/Kuala_Lumpur',
+    'kualalumpur': 'Asia/Kuala_Lumpur',
+    'dubai': 'Asia/Dubai',
+    'riyadh': 'Asia/Riyadh',
+    'tehran': 'Asia/Tehran',
+    
+    // Australia
+    'sydney': 'Australia/Sydney',
+    'melbourne': 'Australia/Melbourne',
+    'brisbane': 'Australia/Brisbane',
+    'perth': 'Australia/Perth',
+    'adelaide': 'Australia/Adelaide',
+    'darwin': 'Australia/Darwin',
+    'canberra': 'Australia/Sydney',
+    
+    // Common abbreviations
+    'utc': 'UTC',
+    'gmt': 'GMT',
+    'cet': 'Europe/Paris',
+    'eet': 'Europe/Helsinki',
+    'jst': 'Asia/Tokyo',
+    'ist': 'Asia/Kolkata'
+  };
+  
+  const inputLower = input.toLowerCase().replace(/[_-]/g, ' ').trim();
+  
+  // Check direct city mappings first (prioritize our mappings)
+  if (cityMappings[inputLower]) {
+    return cityMappings[inputLower];
+  }
+  
+  // If it's already a valid IANA timezone and not in our mappings, return it
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: input });
+    return input;
+  } catch {
+    // Continue with fuzzy matching
+  }
+  
+  // Fuzzy search through available timezones
+  const matches = availableTimezones.filter(tz => {
+    const tzLower = tz.toLowerCase();
+    const tzParts = tzLower.split('/');
+    
+    // Check if input matches any part of the timezone
+    return tzLower.includes(inputLower) || 
+           tzParts.some(part => part.includes(inputLower)) ||
+           inputLower.split(' ').every(word => tzLower.includes(word));
+  });
+  
+  if (matches.length === 1) {
+    return matches[0];
+  }
+  
+  if (matches.length > 1) {
+    // Prefer more specific matches
+    const exactMatches = matches.filter(tz => 
+      tz.toLowerCase().split('/').some(part => part === inputLower)
+    );
+    if (exactMatches.length === 1) {
+      return exactMatches[0];
+    }
+    
+    console.error(`Multiple timezones match "${input}":`)
+    matches.slice(0, 10).forEach(tz => console.error(`  ${tz}`));
+    if (matches.length > 10) {
+      console.error(`  ... and ${matches.length - 10} more`);
+    }
+    console.error('Please be more specific or use --list-timezones to see all options');
+    process.exit(1);
+  }
+  
+  console.error(`No timezone found matching "${input}"`);
+  console.error('Use --list-timezones to see available options');
+  process.exit(1);
 };
 
 const parseDateString = (input, tz = null) => {
@@ -287,6 +461,7 @@ const parseInput = (input, tz = null, format = "table") => {
   }
   if (isISOTimestamp(input)) {
     const { unixSeconds, unixMilliseconds, utcISO } = parseISOTimestamp(input);
+    const { localTime, timezone } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
     const timeDiff = getTimeDifference(unixMilliseconds);
 
     if (format === "json") {
@@ -295,6 +470,8 @@ const parseInput = (input, tz = null, format = "table") => {
           unixSeconds,
           unixMilliseconds,
           utcISO,
+          localTime,
+          timezone,
           timeDifference: timeDiff,
         },
         null,
@@ -306,6 +483,7 @@ const parseInput = (input, tz = null, format = "table") => {
       "┌─────────────────────┬─────────────────────────────────────┐\n";
     output += "│ Format              │ Value                               │\n";
     output += "├─────────────────────┼─────────────────────────────────────┤\n";
+    output += `│ ${timezone.padEnd(19)} │ ${localTime.padEnd(35)} │\n`;
     output += `│ Unix (seconds)      │ ${unixSeconds
       .toString()
       .padEnd(35)} │\n`;
@@ -319,6 +497,7 @@ const parseInput = (input, tz = null, format = "table") => {
   }
   if (isRelativeTime(input)) {
     const { unixSeconds, unixMilliseconds, utcISO } = parseRelativeTime(input);
+    const { localTime, timezone } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
     const timeDiff = getTimeDifference(unixMilliseconds);
 
     if (format === "json") {
@@ -327,6 +506,8 @@ const parseInput = (input, tz = null, format = "table") => {
           unixSeconds,
           unixMilliseconds,
           utcISO,
+          localTime,
+          timezone,
           timeDifference: timeDiff,
         },
         null,
@@ -338,6 +519,7 @@ const parseInput = (input, tz = null, format = "table") => {
       "┌─────────────────────┬─────────────────────────────────────┐\n";
     output += "│ Format              │ Value                               │\n";
     output += "├─────────────────────┼─────────────────────────────────────┤\n";
+    output += `│ ${timezone.padEnd(19)} │ ${localTime.padEnd(35)} │\n`;
     output += `│ Unix (seconds)      │ ${unixSeconds
       .toString()
       .padEnd(35)} │\n`;
@@ -350,6 +532,7 @@ const parseInput = (input, tz = null, format = "table") => {
     return output;
   }
   const { unixSeconds, unixMilliseconds, utcISO } = parseDateString(input, tz);
+  const { localTime, timezone } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
   const timeDiff = getTimeDifference(unixMilliseconds);
 
   if (format === "json") {
@@ -358,6 +541,8 @@ const parseInput = (input, tz = null, format = "table") => {
         unixSeconds,
         unixMilliseconds,
         utcISO,
+        localTime,
+        timezone,
         timeDifference: timeDiff,
       },
       null,
@@ -369,6 +554,7 @@ const parseInput = (input, tz = null, format = "table") => {
     "┌─────────────────────┬─────────────────────────────────────┐\n";
   output += "│ Format              │ Value                               │\n";
   output += "├─────────────────────┼─────────────────────────────────────┤\n";
+  output += `│ ${timezone.padEnd(19)} │ ${localTime.padEnd(35)} │\n`;
   output += `│ Unix (seconds)      │ ${unixSeconds.toString().padEnd(35)} │\n`;
   output += `│ Unix (milliseconds) │ ${unixMilliseconds
     .toString()
@@ -379,78 +565,139 @@ const parseInput = (input, tz = null, format = "table") => {
   return output;
 };
 
+// Process timezone with fuzzy matching now that function is defined
+if (timezone) {
+  timezone = findTimezone(timezone);
+}
+
 try {
   if (!ts) {
-    if (outputFormat === "json") {
-      const now = Date.now();
-      const currentDate = new Date(now);
-      const targetTz =
-        timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    // Only show examples if no arguments were provided at all (not just filtered to empty)
+    if (process.argv.length === 2) {
+        if (outputFormat === "json") {
+        const now = Date.now();
+        const currentDate = new Date(now);
+        const targetTz =
+          timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-      const result = {
-        unixSeconds: Math.floor(now / 1000),
-        unixMilliseconds: now,
-        utcISO: currentDate.toISOString(),
-      };
+        const result = {
+          unixSeconds: Math.floor(now / 1000),
+          unixMilliseconds: now,
+          utcISO: currentDate.toISOString(),
+        };
 
-      if (timezone) {
-        const tzTime = currentDate.toLocaleString("en-US", {
-          timeZone: targetTz,
-        });
-        result.localTime = tzTime;
-        result.timezone = targetTz;
+        if (timezone) {
+          const tzTime = currentDate.toLocaleString("en-US", {
+            timeZone: targetTz,
+          });
+          result.localTime = tzTime;
+          result.timezone = targetTz;
+        }
+
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(
+          'Usage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--output json] [--list-timezones]'
+        );
+        console.log("Examples:");
+        console.log("  ts                          # Show current time");
+        console.log("  ts 1705123456               # Convert Unix timestamp");
+        console.log("  ts 2024-01-13T10:30:00Z     # Convert ISO timestamp");
+        console.log(
+          '  ts "2024-01-13 10:30am"     # Convert date string (local timezone)'
+        );
+        console.log("  ts 1705123456 --tz UTC      # Convert with timezone");
+        console.log("  ts 1705123456 --tz pacific  # Use fuzzy timezone matching");
+        console.log("  ts 1705123456 --tz denver   # City names work too");
+        console.log("  ts +1day                    # Add 1 day to current time");
+        console.log(
+          "  ts -2hours                  # Subtract 2 hours from current time"
+        );
+        console.log("  ts 1705123456 --output json # Output as JSON");
+        console.log("  ts --list-timezones         # Show available timezones");
+        console.log("");
+        const now = Date.now();
+        const currentDate = new Date(now);
+        const targetTz =
+          timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        console.log(
+          "┌─────────────────────┬─────────────────────────────────────┐"
+        );
+        console.log(
+          "│ Format              │ Current Time                        │"
+        );
+        console.log(
+          "├─────────────────────┼─────────────────────────────────────┤"
+        );
+        console.log(
+          `│ Unix (seconds)      │ ${Math.floor(now / 1000)
+            .toString()
+            .padEnd(35)} │`
+        );
+        console.log(`│ Unix (milliseconds) │ ${now.toString().padEnd(35)} │`);
+        console.log(
+          `│ ISO timestamp       │ ${currentDate.toISOString().padEnd(35)} │`
+        );
+        if (timezone) {
+          const { localTime } = formatUnixTimestamp(now.toString(), targetTz);
+          console.log(`│ ${targetTz.padEnd(19)} │ ${localTime.padEnd(35)} │`);
+        }
+        console.log(
+          "└─────────────────────┴─────────────────────────────────────┘"
+        );
       }
-
-      console.log(JSON.stringify(result, null, 2));
     } else {
-      console.log(
-        'Usage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--output json]'
-      );
-      console.log("Examples:");
-      console.log("  ts                          # Show current time");
-      console.log("  ts 1705123456               # Convert Unix timestamp");
-      console.log("  ts 2024-01-13T10:30:00Z     # Convert ISO timestamp");
-      console.log(
-        '  ts "2024-01-13 10:30am"     # Convert date string (local timezone)'
-      );
-      console.log("  ts 1705123456 --tz UTC      # Convert with timezone");
-      console.log("  ts +1day                    # Add 1 day to current time");
-      console.log(
-        "  ts -2hours                  # Subtract 2 hours from current time"
-      );
-      console.log("  ts 1705123456 --output json # Output as JSON");
-      console.log("");
-      const now = Date.now();
-      const currentDate = new Date(now);
-      const targetTz =
-        timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-      console.log(
-        "┌─────────────────────┬─────────────────────────────────────┐"
-      );
-      console.log(
-        "│ Format              │ Current Time                        │"
-      );
-      console.log(
-        "├─────────────────────┼─────────────────────────────────────┤"
-      );
-      console.log(
-        `│ Unix (seconds)      │ ${Math.floor(now / 1000)
-          .toString()
-          .padEnd(35)} │`
-      );
-      console.log(`│ Unix (milliseconds) │ ${now.toString().padEnd(35)} │`);
-      console.log(
-        `│ ISO timestamp       │ ${currentDate.toISOString().padEnd(35)} │`
-      );
-      if (timezone) {
-        const tzTime = currentDate.toLocaleString("en-US", {
-          timeZone: targetTz,
-        });
-        console.log(`│ ${targetTz.padEnd(19)} │ ${tzTime.padEnd(35)} │`);
+      // If arguments were provided but filtered to empty (e.g., only --tz denver), show current time without examples
+      if (outputFormat === "json") {
+        const now = Date.now();
+        const currentDate = new Date(now);
+        const targetTz =
+          timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        const result = {
+          unixSeconds: Math.floor(now / 1000),
+          unixMilliseconds: now,
+          utcISO: currentDate.toISOString(),
+        };
+
+        if (timezone) {
+          const { localTime } = formatUnixTimestamp(now.toString(), targetTz);
+          result.localTime = localTime;
+          result.timezone = targetTz;
+        }
+
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        const now = Date.now();
+        const currentDate = new Date(now);
+        const targetTz =
+          timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        console.log(
+          "┌─────────────────────┬─────────────────────────────────────┐"
+        );
+        console.log(
+          "│ Format              │ Current Time                        │"
+        );
+        console.log(
+          "├─────────────────────┼─────────────────────────────────────┤"
+        );
+        console.log(
+          `│ Unix (seconds)      │ ${Math.floor(now / 1000)
+            .toString()
+            .padEnd(35)} │`
+        );
+        console.log(`│ Unix (milliseconds) │ ${now.toString().padEnd(35)} │`);
+        console.log(
+          `│ ISO timestamp       │ ${currentDate.toISOString().padEnd(35)} │`
+        );
+        if (timezone) {
+          const { localTime } = formatUnixTimestamp(now.toString(), targetTz);
+          console.log(`│ ${targetTz.padEnd(19)} │ ${localTime.padEnd(35)} │`);
+        }
+        console.log(
+          "└─────────────────────┴─────────────────────────────────────┘"
+        );
       }
-      console.log(
-        "└─────────────────────┴─────────────────────────────────────┘"
-      );
     }
   } else {
     if (ts && ts.trim()) {
@@ -469,10 +716,8 @@ try {
         };
 
         if (timezone) {
-          const tzTime = currentDate.toLocaleString("en-US", {
-            timeZone: targetTz,
-          });
-          result.localTime = tzTime;
+          const { localTime } = formatUnixTimestamp(now.toString(), targetTz);
+          result.localTime = localTime;
           result.timezone = targetTz;
         }
 
@@ -520,10 +765,8 @@ try {
           `│ ISO timestamp       │ ${currentDate.toISOString().padEnd(35)} │`
         );
         if (timezone) {
-          const tzTime = currentDate.toLocaleString("en-US", {
-            timeZone: targetTz,
-          });
-          console.log(`│ ${targetTz.padEnd(19)} │ ${tzTime.padEnd(35)} │`);
+          const { localTime } = formatUnixTimestamp(now.toString(), targetTz);
+          console.log(`│ ${targetTz.padEnd(19)} │ ${localTime.padEnd(35)} │`);
         }
         console.log(
           "└─────────────────────┴─────────────────────────────────────┘"
@@ -537,7 +780,7 @@ try {
   } else {
     console.error(`Error: ${error.message}`);
     console.log(
-      '\nUsage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--output json]'
+      '\nUsage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--output json] [--list-timezones]'
     );
     console.log("Examples:");
     console.log("  ts                           # Show current time");
@@ -547,10 +790,13 @@ try {
       '  ts "2024-01-13 10:30am"     # Convert date string (local timezone)'
     );
     console.log("  ts 1705123456 --tz UTC      # Convert with timezone");
+    console.log("  ts 1705123456 --tz pacific  # Use fuzzy timezone matching");
+    console.log("  ts 1705123456 --tz denver   # City names work too");
     console.log("  ts +1day                     # Add 1 day to current time");
     console.log(
       "  ts -2hours                   # Subtract 2 hours from current time"
     );
     console.log("  ts 1705123456 --output json # Output as JSON");
+    console.log("  ts --list-timezones         # Show available timezones");
   }
 }
