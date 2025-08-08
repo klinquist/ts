@@ -140,6 +140,8 @@ const formatUnixTimestamp = (timestamp, tz = null) => {
   const msTimestamp = timestamp.padEnd(13, "0").slice(0, 13); // Pad to milliseconds if needed
   const date = new Date(Number(msTimestamp));
   const targetTz = tz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const offsetInfo = getTimezoneOffsetInfo(targetTz, date);
+  
   return {
     localTime: date.toLocaleString("en-US", {
       timeZone: targetTz,
@@ -152,12 +154,56 @@ const formatUnixTimestamp = (timestamp, tz = null) => {
     }),
     utcISO: date.toISOString(),
     timezone: targetTz,
+    timezoneOffsetText: offsetInfo.relativeText,
+    timezoneOffsetHours: offsetInfo.utcOffset,
   };
 };
 const getTimeZoneOffset = (timeZone, date = new Date()) => {
-  const localTime = date.getTime();
+  // Get the timezone offset by comparing the same moment in UTC vs target timezone
+  const utcDate = new Date(date.toLocaleString("en-US", { timeZone: "UTC" }));
   const tzDate = new Date(date.toLocaleString("en-US", { timeZone }));
-  return (localTime - tzDate.getTime()) / 60000; // Offset in minutes
+  
+  // The difference tells us how many minutes the timezone is offset from UTC
+  return (tzDate.getTime() - utcDate.getTime()) / 60000;
+};
+
+const getTimezoneOffsetInfo = (targetTz, date = new Date()) => {
+  if (!targetTz) return { relativeText: null, utcOffset: null };
+  
+  const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (targetTz === localTz) return { relativeText: null, utcOffset: null };
+  
+  // Get UTC offset for target timezone (in minutes)
+  const targetUtcOffset = getTimeZoneOffset(targetTz, date);
+  
+  // Get UTC offset for local timezone (in minutes) 
+  const localUtcOffset = getTimeZoneOffset(localTz, date);
+  
+  // Calculate the difference between target and local
+  const offsetDiff = targetUtcOffset - localUtcOffset;
+  const hoursDiff = offsetDiff / 60;
+  
+  if (Math.abs(hoursDiff) < 0.1) return { relativeText: null, utcOffset: targetUtcOffset / 60 };
+  
+  const absHours = Math.abs(hoursDiff);
+  const wholeHours = Math.floor(absHours);
+  const minutes = Math.round((absHours - wholeHours) * 60);
+  
+  let offsetText;
+  if (minutes === 0) {
+    offsetText = `${wholeHours} hour${wholeHours !== 1 ? 's' : ''}`;
+  } else {
+    offsetText = `${wholeHours}h ${minutes}m`;
+  }
+  
+  const relativeText = hoursDiff > 0 
+    ? `${offsetText} ahead` 
+    : `${offsetText} behind`;
+    
+  return { 
+    relativeText,
+    utcOffset: targetUtcOffset / 60  // Convert to hours
+  };
 };
 
 const findTimezone = (input) => {
@@ -597,131 +643,156 @@ const parseISOTimestamp = (input) => {
 
 const parseInput = (input, tz = null, format = "table") => {
   if (isUnixTimestamp(input)) {
-    const { localTime, utcISO, timezone } = formatUnixTimestamp(input, tz);
+    const { localTime, utcISO, timezone, timezoneOffsetText, timezoneOffsetHours } = formatUnixTimestamp(input, tz);
     const msTimestamp = input.padEnd(13, "0").slice(0, 13);
     const timeDiff = getTimeDifference(Number(msTimestamp));
 
     if (format === "json") {
-      return JSON.stringify(
-        {
-          unixSeconds: Math.floor(Number(msTimestamp) / 1000),
-          unixMilliseconds: Number(msTimestamp),
-          utcISO,
-          localTime,
-          timezone,
-          timeDifference: timeDiff,
-        },
-        null,
-        2
-      );
+      const result = {
+        unixSeconds: Math.floor(Number(msTimestamp) / 1000),
+        unixMilliseconds: Number(msTimestamp),
+        utcISO,
+        localTime,
+        timezone,
+        timeDifference: timeDiff,
+      };
+      if (timezoneOffsetText) {
+        result.timezoneOffsetText = timezoneOffsetText;
+      }
+      if (timezoneOffsetHours !== null) {
+        result.utcOffset = timezoneOffsetHours;
+      }
+      return JSON.stringify(result, null, 2);
     }
 
     let output =
-      "┌─────────────────────┬─────────────────────────────────────┐\n";
-    output += "│ Format              │ Value                               │\n";
-    output += "├─────────────────────┼─────────────────────────────────────┤\n";
-    output += `│ ${timezone.padEnd(19)} │ ${localTime.padEnd(35)} │\n`;
-    output += `│ UTC ISO timestamp   │ ${utcISO.padEnd(35)} │\n`;
-    output += `│ Time difference     │ ${timeDiff.padEnd(35)} │\n`;
-    output += "└─────────────────────┴─────────────────────────────────────┘";
+      "┌─────────────────────────────────┬─────────────────────────────────────┐\n";
+    output += "│ Format                          │ Value                               │\n";
+    output += "├─────────────────────────────────┼─────────────────────────────────────┤\n";
+    
+    const timezoneLabel = timezoneOffsetText 
+      ? `${timezone} (${timezoneOffsetText})`
+      : timezone;
+    output += `│ ${timezoneLabel.padEnd(31).substring(0, 31)} │ ${localTime.padEnd(35)} │\n`;
+    output += `│ UTC ISO timestamp               │ ${utcISO.padEnd(35)} │\n`;
+    output += `│ Time difference                 │ ${timeDiff.padEnd(35)} │\n`;
+    output += "└─────────────────────────────────┴─────────────────────────────────────┘";
     return output;
   }
   if (isISOTimestamp(input)) {
     const { unixSeconds, unixMilliseconds, utcISO } = parseISOTimestamp(input);
-    const { localTime, timezone } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
+    const { localTime, timezone, timezoneOffsetText, timezoneOffsetHours } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
     const timeDiff = getTimeDifference(unixMilliseconds);
 
     if (format === "json") {
-      return JSON.stringify(
-        {
-          unixSeconds,
-          unixMilliseconds,
-          utcISO,
-          localTime,
-          timezone,
-          timeDifference: timeDiff,
-        },
-        null,
-        2
-      );
-    }
-
-    let output =
-      "┌─────────────────────┬─────────────────────────────────────┐\n";
-    output += "│ Format              │ Value                               │\n";
-    output += "├─────────────────────┼─────────────────────────────────────┤\n";
-    output += `│ ${timezone.padEnd(19)} │ ${localTime.padEnd(35)} │\n`;
-    output += `│ Unix (seconds)      │ ${unixSeconds
-      .toString()
-      .padEnd(35)} │\n`;
-    output += `│ Unix (milliseconds) │ ${unixMilliseconds
-      .toString()
-      .padEnd(35)} │\n`;
-    output += `│ UTC ISO timestamp   │ ${utcISO.padEnd(35)} │\n`;
-    output += `│ Time difference     │ ${timeDiff.padEnd(35)} │\n`;
-    output += "└─────────────────────┴─────────────────────────────────────┘";
-    return output;
-  }
-  if (isRelativeTime(input)) {
-    const { unixSeconds, unixMilliseconds, utcISO } = parseRelativeTime(input);
-    const { localTime, timezone } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
-    const timeDiff = getTimeDifference(unixMilliseconds);
-
-    if (format === "json") {
-      return JSON.stringify(
-        {
-          unixSeconds,
-          unixMilliseconds,
-          utcISO,
-          localTime,
-          timezone,
-          timeDifference: timeDiff,
-        },
-        null,
-        2
-      );
-    }
-
-    let output =
-      "┌─────────────────────┬─────────────────────────────────────┐\n";
-    output += "│ Format              │ Value                               │\n";
-    output += "├─────────────────────┼─────────────────────────────────────┤\n";
-    output += `│ ${timezone.padEnd(19)} │ ${localTime.padEnd(35)} │\n`;
-    output += `│ Unix (seconds)      │ ${unixSeconds
-      .toString()
-      .padEnd(35)} │\n`;
-    output += `│ Unix (milliseconds) │ ${unixMilliseconds
-      .toString()
-      .padEnd(35)} │\n`;
-    output += `│ UTC ISO timestamp   │ ${utcISO.padEnd(35)} │\n`;
-    output += `│ Time difference     │ ${timeDiff.padEnd(35)} │\n`;
-    output += "└─────────────────────┴─────────────────────────────────────┘";
-    return output;
-  }
-  const { unixSeconds, unixMilliseconds, utcISO } = parseDateString(input, tz);
-  const { localTime, timezone } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
-  const timeDiff = getTimeDifference(unixMilliseconds);
-
-  if (format === "json") {
-    return JSON.stringify(
-      {
+      const result = {
         unixSeconds,
         unixMilliseconds,
         utcISO,
         localTime,
         timezone,
         timeDifference: timeDiff,
-      },
-      null,
-      2
-    );
+      };
+      if (timezoneOffsetText) {
+        result.timezoneOffsetText = timezoneOffsetText;
+      }
+      if (timezoneOffsetHours !== null) {
+        result.utcOffset = timezoneOffsetHours;
+      }
+      return JSON.stringify(result, null, 2);
+    }
+
+    let output =
+      "┌─────────────────────────────────┬─────────────────────────────────────┐\n";
+    output += "│ Format                          │ Value                               │\n";
+    output += "├─────────────────────────────────┼─────────────────────────────────────┤\n";
+    
+    const timezoneLabel = timezoneOffsetText 
+      ? `${timezone} (${timezoneOffsetText})`
+      : timezone;
+    output += `│ ${timezoneLabel.padEnd(31).substring(0, 31)} │ ${localTime.padEnd(35)} │\n`;
+    output += `│ Unix (seconds)                  │ ${unixSeconds
+      .toString()
+      .padEnd(35)} │\n`;
+    output += `│ Unix (milliseconds)             │ ${unixMilliseconds
+      .toString()
+      .padEnd(35)} │\n`;
+    output += `│ UTC ISO timestamp               │ ${utcISO.padEnd(35)} │\n`;
+    output += `│ Time difference                 │ ${timeDiff.padEnd(35)} │\n`;
+    output += "└─────────────────────────────────┴─────────────────────────────────────┘";
+    return output;
+  }
+  if (isRelativeTime(input)) {
+    const { unixSeconds, unixMilliseconds, utcISO } = parseRelativeTime(input);
+    const { localTime, timezone, timezoneOffsetText, timezoneOffsetHours } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
+    const timeDiff = getTimeDifference(unixMilliseconds);
+
+    if (format === "json") {
+      const result = {
+        unixSeconds,
+        unixMilliseconds,
+        utcISO,
+        localTime,
+        timezone,
+        timeDifference: timeDiff,
+      };
+      if (timezoneOffsetText) {
+        result.timezoneOffsetText = timezoneOffsetText;
+      }
+      if (timezoneOffsetHours !== null) {
+        result.utcOffset = timezoneOffsetHours;
+      }
+      return JSON.stringify(result, null, 2);
+    }
+
+    let output =
+      "┌─────────────────────────────────┬─────────────────────────────────────┐\n";
+    output += "│ Format                          │ Value                               │\n";
+    output += "├─────────────────────────────────┼─────────────────────────────────────┤\n";
+    
+    const timezoneLabel = timezoneOffsetText 
+      ? `${timezone} (${timezoneOffsetText})`
+      : timezone;
+    output += `│ ${timezoneLabel.padEnd(31).substring(0, 31)} │ ${localTime.padEnd(35)} │\n`;
+    output += `│ Unix (seconds)                  │ ${unixSeconds
+      .toString()
+      .padEnd(35)} │\n`;
+    output += `│ Unix (milliseconds)             │ ${unixMilliseconds
+      .toString()
+      .padEnd(35)} │\n`;
+    output += `│ UTC ISO timestamp               │ ${utcISO.padEnd(35)} │\n`;
+    output += `│ Time difference                 │ ${timeDiff.padEnd(35)} │\n`;
+    output += "└─────────────────────────────────┴─────────────────────────────────────┘";
+    return output;
+  }
+  const { unixSeconds, unixMilliseconds, utcISO } = parseDateString(input, tz);
+  const { localTime, timezone, timezoneOffset } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
+  const timeDiff = getTimeDifference(unixMilliseconds);
+
+  if (format === "json") {
+    const result = {
+      unixSeconds,
+      unixMilliseconds,
+      utcISO,
+      localTime,
+      timezone,
+      timeDifference: timeDiff,
+    };
+    if (timezoneOffset) {
+      result.timezoneOffset = timezoneOffset;
+    }
+    return JSON.stringify(result, null, 2);
   }
 
   let output =
     "┌─────────────────────┬─────────────────────────────────────┐\n";
   output += "│ Format              │ Value                               │\n";
   output += "├─────────────────────┼─────────────────────────────────────┤\n";
-  output += `│ ${timezone.padEnd(19)} │ ${localTime.padEnd(35)} │\n`;
+  
+  const timezoneLabel = timezoneOffset 
+    ? `${timezone} (${timezoneOffset})`
+    : timezone;
+  output += `│ ${timezoneLabel.padEnd(19).substring(0, 19)} │ ${localTime.padEnd(35)} │\n`;
   output += `│ Unix (seconds)      │ ${unixSeconds.toString().padEnd(35)} │\n`;
   output += `│ Unix (milliseconds) │ ${unixMilliseconds
     .toString()
@@ -788,29 +859,32 @@ try {
         const targetTz =
           timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
         console.log(
-          "┌─────────────────────┬─────────────────────────────────────┐"
+          "┌─────────────────────────────────┬─────────────────────────────────────┐"
         );
         console.log(
-          "│ Format              │ Current Time                        │"
+          "│ Format                          │ Current Time                        │"
         );
         console.log(
-          "├─────────────────────┼─────────────────────────────────────┤"
+          "├─────────────────────────────────┼─────────────────────────────────────┤"
         );
         console.log(
-          `│ Unix (seconds)      │ ${Math.floor(now / 1000)
+          `│ Unix (seconds)                  │ ${Math.floor(now / 1000)
             .toString()
             .padEnd(35)} │`
         );
-        console.log(`│ Unix (milliseconds) │ ${now.toString().padEnd(35)} │`);
+        console.log(`│ Unix (milliseconds)             │ ${now.toString().padEnd(35)} │`);
         console.log(
-          `│ ISO timestamp       │ ${currentDate.toISOString().padEnd(35)} │`
+          `│ ISO timestamp                   │ ${currentDate.toISOString().padEnd(35)} │`
         );
         if (timezone) {
-          const { localTime } = formatUnixTimestamp(now.toString(), targetTz);
-          console.log(`│ ${targetTz.padEnd(19)} │ ${localTime.padEnd(35)} │`);
+          const { localTime, timezoneOffsetText } = formatUnixTimestamp(now.toString(), targetTz);
+          const timezoneLabel = timezoneOffsetText 
+            ? `${targetTz} (${timezoneOffsetText})`
+            : targetTz;
+          console.log(`│ ${timezoneLabel.padEnd(31).substring(0, 31)} │ ${localTime.padEnd(35)} │`);
         }
         console.log(
-          "└─────────────────────┴─────────────────────────────────────┘"
+          "└─────────────────────────────────┴─────────────────────────────────────┘"
         );
       }
     } else {
@@ -828,9 +902,15 @@ try {
         };
 
         if (timezone) {
-          const { localTime } = formatUnixTimestamp(now.toString(), targetTz);
+          const { localTime, timezoneOffsetText, timezoneOffsetHours } = formatUnixTimestamp(now.toString(), targetTz);
           result.localTime = localTime;
           result.timezone = targetTz;
+          if (timezoneOffsetText) {
+            result.timezoneOffsetText = timezoneOffsetText;
+          }
+          if (timezoneOffsetHours !== null) {
+            result.utcOffset = timezoneOffsetHours;
+          }
         }
 
         console.log(JSON.stringify(result, null, 2));
@@ -840,29 +920,32 @@ try {
         const targetTz =
           timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
         console.log(
-          "┌─────────────────────┬─────────────────────────────────────┐"
+          "┌─────────────────────────────────┬─────────────────────────────────────┐"
         );
         console.log(
-          "│ Format              │ Current Time                        │"
+          "│ Format                          │ Current Time                        │"
         );
         console.log(
-          "├─────────────────────┼─────────────────────────────────────┤"
+          "├─────────────────────────────────┼─────────────────────────────────────┤"
         );
         console.log(
-          `│ Unix (seconds)      │ ${Math.floor(now / 1000)
+          `│ Unix (seconds)                  │ ${Math.floor(now / 1000)
             .toString()
             .padEnd(35)} │`
         );
-        console.log(`│ Unix (milliseconds) │ ${now.toString().padEnd(35)} │`);
+        console.log(`│ Unix (milliseconds)             │ ${now.toString().padEnd(35)} │`);
         console.log(
-          `│ ISO timestamp       │ ${currentDate.toISOString().padEnd(35)} │`
+          `│ ISO timestamp                   │ ${currentDate.toISOString().padEnd(35)} │`
         );
         if (timezone) {
-          const { localTime } = formatUnixTimestamp(now.toString(), targetTz);
-          console.log(`│ ${targetTz.padEnd(19)} │ ${localTime.padEnd(35)} │`);
+          const { localTime, timezoneOffsetText } = formatUnixTimestamp(now.toString(), targetTz);
+          const timezoneLabel = timezoneOffsetText 
+            ? `${targetTz} (${timezoneOffsetText})`
+            : targetTz;
+          console.log(`│ ${timezoneLabel.padEnd(31).substring(0, 31)} │ ${localTime.padEnd(35)} │`);
         }
         console.log(
-          "└─────────────────────┴─────────────────────────────────────┘"
+          "└─────────────────────────────────┴─────────────────────────────────────┘"
         );
       }
     }
@@ -883,9 +966,15 @@ try {
         };
 
         if (timezone) {
-          const { localTime } = formatUnixTimestamp(now.toString(), targetTz);
+          const { localTime, timezoneOffsetText, timezoneOffsetHours } = formatUnixTimestamp(now.toString(), targetTz);
           result.localTime = localTime;
           result.timezone = targetTz;
+          if (timezoneOffsetText) {
+            result.timezoneOffsetText = timezoneOffsetText;
+          }
+          if (timezoneOffsetHours !== null) {
+            result.utcOffset = timezoneOffsetHours;
+          }
         }
 
         console.log(JSON.stringify(result, null, 2));
@@ -914,29 +1003,32 @@ try {
         const targetTz =
           timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
         console.log(
-          "┌─────────────────────┬─────────────────────────────────────┐"
+          "┌─────────────────────────────────┬─────────────────────────────────────┐"
         );
         console.log(
-          "│ Format              │ Current Time                        │"
+          "│ Format                          │ Current Time                        │"
         );
         console.log(
-          "├─────────────────────┼─────────────────────────────────────┤"
+          "├─────────────────────────────────┼─────────────────────────────────────┤"
         );
         console.log(
-          `│ Unix (seconds)      │ ${Math.floor(now / 1000)
+          `│ Unix (seconds)                  │ ${Math.floor(now / 1000)
             .toString()
             .padEnd(35)} │`
         );
-        console.log(`│ Unix (milliseconds) │ ${now.toString().padEnd(35)} │`);
+        console.log(`│ Unix (milliseconds)             │ ${now.toString().padEnd(35)} │`);
         console.log(
-          `│ ISO timestamp       │ ${currentDate.toISOString().padEnd(35)} │`
+          `│ ISO timestamp                   │ ${currentDate.toISOString().padEnd(35)} │`
         );
         if (timezone) {
-          const { localTime } = formatUnixTimestamp(now.toString(), targetTz);
-          console.log(`│ ${targetTz.padEnd(19)} │ ${localTime.padEnd(35)} │`);
+          const { localTime, timezoneOffsetText } = formatUnixTimestamp(now.toString(), targetTz);
+          const timezoneLabel = timezoneOffsetText 
+            ? `${targetTz} (${timezoneOffsetText})`
+            : targetTz;
+          console.log(`│ ${timezoneLabel.padEnd(31).substring(0, 31)} │ ${localTime.padEnd(35)} │`);
         }
         console.log(
-          "└─────────────────────┴─────────────────────────────────────┘"
+          "└─────────────────────────────────┴─────────────────────────────────────┘"
         );
       }
     }

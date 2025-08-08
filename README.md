@@ -1,6 +1,6 @@
 If you're like me, you deal in unix time all day long. You're probably not like me.
 
-This is a simple command line timestamp converter supporting Unix timestamps, ISO timestamps, date strings, and relative time expressions. No dependencies, just run `npm install -g` to create the "ts" symlink to allow you to use it anywhere (assuming you have your npm/bin folder in the path)
+This is a simple command line timestamp converter supporting Unix timestamps, ISO timestamps, date strings, and relative time expressions with intelligent timezone support. No dependencies, just run `npm install -g` to create the "ts" symlink to allow you to use it anywhere (assuming you have your npm/bin folder in the path)
 
 ## Usage
 
@@ -9,13 +9,13 @@ This is a simple command line timestamp converter supporting Unix timestamps, IS
 `ts` displays current time in a formatted table:
 
 ```
-┌─────────────────────┬─────────────────────────────────────┐
-│ Format              │ Current Time                        │
-├─────────────────────┼─────────────────────────────────────┤
-│ Unix (seconds)      │ 1515176243                          │
-│ Unix (milliseconds) │ 1515176243049                       │
-│ ISO timestamp       │ 2018-01-05T18:05:13.088Z            │
-└─────────────────────┴─────────────────────────────────────┘
+┌─────────────────────────────────┬─────────────────────────────────────┐
+│ Format                          │ Current Time                        │
+├─────────────────────────────────┼─────────────────────────────────────┤
+│ Unix (seconds)                  │ 1515176243                          │
+│ Unix (milliseconds)             │ 1515176243049                       │
+│ ISO timestamp                   │ 2018-01-05T18:05:13.088Z            │
+└─────────────────────────────────┴─────────────────────────────────────┘
 ```
 
 ### Unix Timestamp Input
@@ -24,13 +24,13 @@ This is a simple command line timestamp converter supporting Unix timestamps, IS
 
 ```
 ts 1515176243
-┌─────────────────────┬─────────────────────────────────────┐
-│ Format              │ Value                               │
-├─────────────────────┼─────────────────────────────────────┤
-│ America/Los_Angeles │ Jan 5, 2018, 10:05:13 AM            │
-│ UTC ISO timestamp   │ 2018-01-05T18:05:13.000Z            │
-│ Time difference     │ 7 years, 6 months ago               │
-└─────────────────────┴─────────────────────────────────────┘
+┌─────────────────────────────────┬─────────────────────────────────────┐
+│ Format                          │ Value                               │
+├─────────────────────────────────┼─────────────────────────────────────┤
+│ America/Los_Angeles             │ Jan 5, 2018, 10:05:13 AM            │
+│ UTC ISO timestamp               │ 2018-01-05T18:05:13.000Z            │
+│ Time difference                 │ 7 years, 6 months ago               │
+└─────────────────────────────────┴─────────────────────────────────────┘
 ```
 
 ### ISO Timestamp Input
@@ -39,14 +39,14 @@ ts 1515176243
 
 ```
 ts 2018-01-05T18:05:13.088Z
-┌─────────────────────┬─────────────────────────────────────┐
-│ Format              │ Value                               │
-├─────────────────────┼─────────────────────────────────────┤
-│ Unix (seconds)      │ 1515176713                          │
-│ Unix (milliseconds) │ 1515176713088                       │
-│ UTC ISO timestamp   │ 2018-01-05T18:05:13.088Z            │
-│ Time difference     │ 7 years, 6 months ago               │
-└─────────────────────┴─────────────────────────────────────┘
+┌─────────────────────────────────┬─────────────────────────────────────┐
+│ Format                          │ Value                               │
+├─────────────────────────────────┼─────────────────────────────────────┤
+│ Unix (seconds)                  │ 1515176713                          │
+│ Unix (milliseconds)             │ 1515176713088                       │
+│ UTC ISO timestamp               │ 2018-01-05T18:05:13.088Z            │
+│ Time difference                 │ 7 years, 6 months ago               │
+└─────────────────────────────────┴─────────────────────────────────────┘
 ```
 
 ### Date String Input
@@ -55,28 +55,28 @@ ts 2018-01-05T18:05:13.088Z
 
 ```
 ts "2018-01-05 10:05am"
-┌─────────────────────┬─────────────────────────────────────┐
-│ Format              │ Value                               │
-├─────────────────────┼─────────────────────────────────────┤
-│ Unix (seconds)      │ 1515176700                          │
-│ Unix (milliseconds) │ 1515176700000                       │
-│ UTC ISO timestamp   │ 2018-01-05T18:05:00.000Z            │
-│ Time difference     │ 7 years, 6 months ago               │
-└─────────────────────┴─────────────────────────────────────┘
+┌─────────────────────────────────┬─────────────────────────────────────┐
+│ Format                          │ Value                               │
+├─────────────────────────────────┼─────────────────────────────────────┤
+│ Unix (seconds)                  │ 1515176700                          │
+│ Unix (milliseconds)             │ 1515176700000                       │
+│ UTC ISO timestamp               │ 2018-01-05T18:05:00.000Z            │
+│ Time difference                 │ 7 years, 6 months ago               │
+└─────────────────────────────────┴─────────────────────────────────────┘
 ```
 
 Date strings also support timezone specification:
 
 ```
 ts "2018-01-05 10:05am" --tz America/New_York
-┌─────────────────────┬─────────────────────────────────────┐
-│ Format              │ Value                               │
-├─────────────────────┼─────────────────────────────────────┤
-│ Unix (seconds)      │ 1515168300                          │
-│ Unix (milliseconds) │ 1515168300000                       │
-│ UTC ISO timestamp   │ 2018-01-05T16:05:00.000Z            │
-│ Time difference     │ 7 years, 6 months ago               │
-└─────────────────────┴─────────────────────────────────────┘
+┌─────────────────────────────────┬─────────────────────────────────────┐
+│ Format                          │ Value                               │
+├─────────────────────────────────┼─────────────────────────────────────┤
+│ Unix (seconds)                  │ 1515168300                          │
+│ Unix (milliseconds)             │ 1515168300000                       │
+│ UTC ISO timestamp               │ 2018-01-05T16:05:00.000Z            │
+│ Time difference                 │ 7 years, 6 months ago               │
+└─────────────────────────────────┴─────────────────────────────────────┘
 ```
 
 ### Relative Time Input
@@ -85,14 +85,14 @@ ts "2018-01-05 10:05am" --tz America/New_York
 
 ```
 ts +1day
-┌─────────────────────┬─────────────────────────────────────┐
-│ Format              │ Value                               │
-├─────────────────────┼─────────────────────────────────────┤
-│ Unix (seconds)      │ 1753798995                          │
-│ Unix (milliseconds) │ 1753798995329                       │
-│ UTC ISO timestamp   │ 2025-07-29T14:23:15.329Z            │
-│ Time difference     │ 23 hours, 59 minutes in the future  │
-└─────────────────────┴─────────────────────────────────────┘
+┌─────────────────────────────────┬─────────────────────────────────────┐
+│ Format                          │ Value                               │
+├─────────────────────────────────┼─────────────────────────────────────┤
+│ Unix (seconds)                  │ 1753798995                          │
+│ Unix (milliseconds)             │ 1753798995329                       │
+│ UTC ISO timestamp               │ 2025-07-29T14:23:15.329Z            │
+│ Time difference                 │ 23 hours, 59 minutes in the future  │
+└─────────────────────────────────┴─────────────────────────────────────┘
 ```
 
 **Supported relative time formats:**
@@ -106,34 +106,75 @@ ts +1day
 
 ### Timezone Support
 
-Use `--tz` flag to specify output timezone:
+Use `--tz` flag to specify output timezone. When specifying a different timezone, the tool automatically shows how many hours ahead or behind it is compared to your local timezone:
 
 ```
-ts 1515176243 --tz America/New_York
-┌─────────────────────┬─────────────────────────────────────┐
-│ Format              │ Value                               │
-├─────────────────────┼─────────────────────────────────────┤
-│ America/New_York    │ Jan 5, 2018, 01:05:13 PM            │
-│ UTC ISO timestamp   │ 2018-01-05T18:05:13.000Z            │
-│ Time difference     │ 7 years, 6 months ago               │
-└─────────────────────┴─────────────────────────────────────┘
+ts 1705123456 --tz UTC
+┌─────────────────────────────────┬─────────────────────────────────────┐
+│ Format                          │ Value                               │
+├─────────────────────────────────┼─────────────────────────────────────┤
+│ UTC (8 hours ahead)             │ Jan 13, 2024, 05:24:16 AM           │
+│ UTC ISO timestamp               │ 2024-01-13T05:24:16.000Z            │
+│ Time difference                 │ 573 days, 12 hours ago              │
+└─────────────────────────────────┴─────────────────────────────────────┘
 ```
+
+The timezone offset automatically accounts for daylight saving time based on the specific date being converted:
+
+```
+ts 1720123456 --tz UTC
+┌─────────────────────────────────┬─────────────────────────────────────┐
+│ Format                          │ Value                               │
+├─────────────────────────────────┼─────────────────────────────────────┤
+│ UTC (7 hours ahead)             │ Jul 4, 2024, 08:04:16 PM            │
+│ UTC ISO timestamp               │ 2024-07-04T20:04:16.000Z            │
+│ Time difference                 │ 399 days, 22 hours ago              │
+└─────────────────────────────────┴─────────────────────────────────────┘
+```
+
+#### Fuzzy Timezone Matching
+
+The tool supports fuzzy timezone matching with common shortcuts and city names:
+
+- **US Timezones**: `pacific`, `central`, `mountain`, `eastern`, `pst`, `cst`, `mst`, `est`
+- **Cities**: `denver`, `chicago`, `nyc`, `la`, `london`, `paris`, `tokyo`, `sydney`, etc.
+- **Countries**: `usa`, `uk`, `germany`, `japan`, `australia`, etc.
+- **Standard IANA names**: `America/New_York`, `Europe/London`, `Asia/Tokyo`
+
+```
+ts 1705123456 --tz tokyo
+┌─────────────────────────────────┬─────────────────────────────────────┐
+│ Format                          │ Value                               │
+├─────────────────────────────────┼─────────────────────────────────────┤
+│ Asia/Tokyo (17 hours ahead)     │ Jan 13, 2024, 02:24:16 PM           │
+│ UTC ISO timestamp               │ 2024-01-13T05:24:16.000Z            │
+│ Time difference                 │ 573 days, 12 hours ago              │
+└─────────────────────────────────┴─────────────────────────────────────┘
+```
+
+Use `--list-timezones` to see all available timezone options and shortcuts.
 
 ### JSON Output
 
 Use `--output json` to get structured JSON output instead of a table. This works for all input types, including current time, timestamps, date strings, and relative time.
 
 ```
-ts 1705123456 --output json
+ts 1705123456 --tz UTC --output json
 {
   "unixSeconds": 1705123456,
   "unixMilliseconds": 1705123456000,
-  "utcISO": "2024-01-13T10:30:56.000Z",
-  "localTime": "Jan 13, 2024, 2:30:56 AM",
-  "timezone": "America/Los_Angeles",
-  "timeDifference": "X days ago"
+  "utcISO": "2024-01-13T05:24:16.000Z",
+  "localTime": "Jan 13, 2024, 05:24:16 AM",
+  "timezone": "UTC",
+  "timeDifference": "573 days, 12 hours ago",
+  "timezoneOffsetText": "8 hours ahead",
+  "utcOffset": 0
 }
 ```
+
+The JSON output includes:
+- `timezoneOffsetText`: Human-readable relative offset (e.g., "8 hours ahead")
+- `utcOffset`: Numeric UTC offset in hours (e.g., -8 for Pacific, +9 for Tokyo)
 
 If you run just `ts --output json`, you get the current time as JSON:
 
@@ -172,35 +213,24 @@ All timestamp conversions now include a human-readable time difference:
 - Relative time expressions (+/-<number><unit>)
 - Timezone names (e.g., America/New_York, Europe/London, UTC)
 
-## Examples
+## Quick Examples
 
 ```bash
 # Current time
 ts
-
 ts --output json
 
-# Unix timestamp conversion
-ts 1515176243
-ts 1515176243 --output json
+# Unix timestamp with timezone offset info
+ts 1705123456 --tz UTC
+ts 1705123456 --tz tokyo --output json
 
-# ISO timestamp conversion
-ts 2018-01-05T18:05:13.088Z
-ts 2018-01-05T18:05:13.088Z --output json
-
-# Date string conversion
-ts "2018-01-05 10:05am"
-ts "2018-01-05 10:05am" --output json
-
-# Relative time calculations
+# Relative time
 ts +1day
-ts +1day --output json
-ts -2hours
-ts +1month
-ts -1year
+ts -2hours --tz london
 
-# With timezone
-ts 1515176243 --tz America/New_York
-ts 1515176243 --tz America/New_York --output json
-ts "2018-01-05 10:05am" --tz America/New_York
+# Date string with timezone
+ts "2024-01-13 10:30am" --tz America/New_York
+
+# List available timezones
+ts --list-timezones
 ```
