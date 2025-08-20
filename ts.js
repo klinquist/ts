@@ -2,6 +2,7 @@
 
 let ts = process.argv[2];
 let timezone = null;
+let sourceTimezone = null;
 let outputFormat = "table";
 
 // Check for output format flag
@@ -14,6 +15,12 @@ if (outputIndex !== -1 && process.argv[outputIndex + 1]) {
 const tzIndex = process.argv.indexOf("--tz");
 if (tzIndex !== -1 && process.argv[tzIndex + 1]) {
   timezone = process.argv[tzIndex + 1]; // Store raw input for now
+}
+
+// Check for source timezone flag
+const sourceTzIndex = process.argv.indexOf("--sourcetz");
+if (sourceTzIndex !== -1 && process.argv[sourceTzIndex + 1]) {
+  sourceTimezone = process.argv[sourceTzIndex + 1]; // Store raw input for now
 }
 
 // Check for list-timezones flag
@@ -36,7 +43,7 @@ const args = process.argv.slice(2);
 const filteredArgs = [];
 
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === "--output" || args[i] === "--tz") {
+  if (args[i] === "--output" || args[i] === "--tz" || args[i] === "--sourcetz") {
     i++; // Skip the flag value
   } else if (args[i] === "--list-timezones") {
     // Skip this flag (no value)
@@ -530,7 +537,7 @@ const findTimezone = (input) => {
   process.exit(1);
 };
 
-const parseDateString = (input, tz = null) => {
+const parseDateString = (input, sourceTz = null) => {
   const dateRegex = /^(\d{4})-(\d{2})-(\d{2}) (\d{1,2}):(\d{2})(am|pm)$/i;
   const match = input.match(dateRegex);
 
@@ -552,36 +559,49 @@ const parseDateString = (input, tz = null) => {
     hour = 0;
   }
 
-  // Create a Date object using specified timezone or local timezone
-  const targetTz = tz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (sourceTz) {
+    // If source timezone is specified, interpret the time in that timezone
+    // Create a date in UTC that represents the same wall-clock time
+    const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+    
+    // Get the timezone offset for the source timezone
+    // This tells us how many minutes the source timezone is ahead/behind UTC
+    const sourceOffset = getTimeZoneOffset(sourceTz, utcDate);
+    
+    // Adjust the UTC date by the source timezone offset
+    // If source is UTC-4 (like Eastern in summer), offset is -240 minutes
+    // We need to add those minutes to convert source time to UTC
+    const adjustedDate = new Date(utcDate.getTime() - (sourceOffset * 60 * 1000));
 
-  // Create the date string in the target timezone
-  const dateString = `${year}-${month.toString().padStart(2, "0")}-${day
-    .toString()
-    .padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute
-    .toString()
-    .padStart(2, "0")}:00`;
+    if (isNaN(adjustedDate.getTime())) {
+      throw new Error("Invalid date. Please check the day, month, and year.");
+    }
 
-  // Create a date object and convert it to the target timezone
-  const localDate = new Date(dateString);
+    return {
+      unixSeconds: Math.floor(adjustedDate.getTime() / 1000),
+      unixMilliseconds: adjustedDate.getTime(),
+      utcISO: adjustedDate.toISOString(),
+    };
+  } else {
+    // If no source timezone specified, treat as local time (no conversion needed)
+    const dateString = `${year}-${month.toString().padStart(2, "0")}-${day
+      .toString()
+      .padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute
+      .toString()
+      .padStart(2, "0")}:00`;
 
-  // Get the timezone offset for the target timezone
-  const targetOffset = getTimeZoneOffset(targetTz, localDate);
-  const localOffset = localDate.getTimezoneOffset();
-  const offsetDiff = targetOffset - localOffset;
+    const localDate = new Date(dateString);
 
-  // Adjust the date by the timezone difference
-  const adjustedDate = new Date(localDate.getTime() + offsetDiff * 60 * 1000);
+    if (isNaN(localDate.getTime())) {
+      throw new Error("Invalid date. Please check the day, month, and year.");
+    }
 
-  if (isNaN(adjustedDate.getTime())) {
-    throw new Error("Invalid date. Please check the day, month, and year.");
+    return {
+      unixSeconds: Math.floor(localDate.getTime() / 1000),
+      unixMilliseconds: localDate.getTime(),
+      utcISO: localDate.toISOString(),
+    };
   }
-
-  return {
-    unixSeconds: Math.floor(adjustedDate.getTime() / 1000),
-    unixMilliseconds: adjustedDate.getTime(),
-    utcISO: adjustedDate.toISOString(),
-  };
 };
 
 const getTimeDifference = (timestamp) => {
@@ -641,7 +661,7 @@ const parseISOTimestamp = (input) => {
   };
 };
 
-const parseInput = (input, tz = null, format = "table") => {
+const parseInput = (input, tz = null, sourceTz = null, format = "table") => {
   if (isUnixTimestamp(input)) {
     const { localTime, utcISO, timezone, timezoneOffsetText, timezoneOffsetHours } = formatUnixTimestamp(input, tz);
     const msTimestamp = input.padEnd(13, "0").slice(0, 13);
@@ -765,8 +785,8 @@ const parseInput = (input, tz = null, format = "table") => {
     output += "└─────────────────────────────────┴─────────────────────────────────────┘";
     return output;
   }
-  const { unixSeconds, unixMilliseconds, utcISO } = parseDateString(input, tz);
-  const { localTime, timezone, timezoneOffset } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
+  const { unixSeconds, unixMilliseconds, utcISO } = parseDateString(input, sourceTz);
+  const { localTime, timezone: displayTimezone, timezoneOffset } = formatUnixTimestamp(unixMilliseconds.toString(), tz);
   const timeDiff = getTimeDifference(unixMilliseconds);
 
   if (format === "json") {
@@ -775,7 +795,7 @@ const parseInput = (input, tz = null, format = "table") => {
       unixMilliseconds,
       utcISO,
       localTime,
-      timezone,
+      timezone: displayTimezone,
       timeDifference: timeDiff,
     };
     if (timezoneOffset) {
@@ -790,8 +810,8 @@ const parseInput = (input, tz = null, format = "table") => {
   output += "├─────────────────────┼─────────────────────────────────────┤\n";
   
   const timezoneLabel = timezoneOffset 
-    ? `${timezone} (${timezoneOffset})`
-    : timezone;
+    ? `${displayTimezone} (${timezoneOffset})`
+    : displayTimezone;
   output += `│ ${timezoneLabel.padEnd(19).substring(0, 19)} │ ${localTime.padEnd(35)} │\n`;
   output += `│ Unix (seconds)      │ ${unixSeconds.toString().padEnd(35)} │\n`;
   output += `│ Unix (milliseconds) │ ${unixMilliseconds
@@ -806,6 +826,9 @@ const parseInput = (input, tz = null, format = "table") => {
 // Process timezone with fuzzy matching now that function is defined
 if (timezone) {
   timezone = findTimezone(timezone);
+}
+if (sourceTimezone) {
+  sourceTimezone = findTimezone(sourceTimezone);
 }
 
 try {
@@ -835,24 +858,30 @@ try {
         console.log(JSON.stringify(result, null, 2));
       } else {
         console.log(
-          'Usage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--output json] [--list-timezones]'
+          'Usage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--sourcetz timezone] [--output json] [--list-timezones]'
         );
         console.log("Examples:");
-        console.log("  ts                          # Show current time");
-        console.log("  ts 1705123456               # Convert Unix timestamp");
-        console.log("  ts 2024-01-13T10:30:00Z     # Convert ISO timestamp");
+        console.log("  ts                                    # Show current time");
+        console.log("  ts 1705123456                         # Convert Unix timestamp");
+        console.log("  ts 2024-01-13T10:30:00Z               # Convert ISO timestamp");
         console.log(
-          '  ts "2024-01-13 10:30am"     # Convert date string (local timezone)'
+          '  ts "2024-01-13 10:30am"               # Convert date string (local timezone)'
         );
-        console.log("  ts 1705123456 --tz UTC      # Convert with timezone");
-        console.log("  ts 1705123456 --tz pacific  # Use fuzzy timezone matching");
-        console.log("  ts 1705123456 --tz denver   # City names work too");
-        console.log("  ts +1day                    # Add 1 day to current time");
+        console.log("  ts 1705123456 --tz UTC                # Show timestamp in UTC");
+        console.log("  ts 1705123456 --tz pacific            # Use fuzzy timezone matching");
+        console.log('  ts "2024-01-13 10:30am" --sourcetz eastern  # Input time is Eastern, show in local timezone');
+        console.log('  ts "2024-01-13 10:30am" --sourcetz eastern --tz pacific  # Input is Eastern, show in Pacific');
+        console.log("  ts +1day                              # Add 1 day to current time");
         console.log(
-          "  ts -2hours                  # Subtract 2 hours from current time"
+          "  ts -2hours                            # Subtract 2 hours from current time"
         );
-        console.log("  ts 1705123456 --output json # Output as JSON");
-        console.log("  ts --list-timezones         # Show available timezones");
+        console.log("  ts 1705123456 --output json           # Output as JSON");
+        console.log("  ts --list-timezones                   # Show available timezones");
+        console.log("");
+        console.log("Flags:");
+        console.log("  --tz TIMEZONE       Display output in specified timezone");
+        console.log("  --sourcetz TIMEZONE Interpret input time as being in specified timezone");
+        console.log("                      (only applies to date strings like '2024-01-13 10:30am')");
         console.log("");
         const now = Date.now();
         const currentDate = new Date(now);
@@ -951,7 +980,7 @@ try {
     }
   } else {
     if (ts && ts.trim()) {
-      console.log(parseInput(ts, timezone, outputFormat));
+      console.log(parseInput(ts, timezone, sourceTimezone, outputFormat));
     } else {
       if (outputFormat === "json") {
         const now = Date.now();
@@ -980,23 +1009,24 @@ try {
         console.log(JSON.stringify(result, null, 2));
       } else {
         console.log(
-          'Usage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--output json]'
+          'Usage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--sourcetz timezone] [--output json]'
         );
         console.log("Examples:");
-        console.log("  ts                          # Show current time");
-        console.log("  ts 1705123456               # Convert Unix timestamp");
-        console.log("  ts 2024-01-13T10:30:00Z     # Convert ISO timestamp");
+        console.log("  ts                                    # Show current time");
+        console.log("  ts 1705123456                         # Convert Unix timestamp");
+        console.log("  ts 2024-01-13T10:30:00Z               # Convert ISO timestamp");
         console.log(
-          '  ts "2024-01-13 10:30am"     # Convert date string (local timezone)'
+          '  ts "2024-01-13 10:30am"               # Convert date string (local timezone)'
         );
-        console.log("  ts 1705123456 --tz UTC      # Convert with timezone");
+        console.log("  ts 1705123456 --tz UTC                # Show timestamp in UTC");
+        console.log('  ts "2024-01-13 10:30am" --sourcetz eastern  # Input time is Eastern, show in local timezone');
         console.log(
-          "  ts +1day                    # Add 1 day to current time"
+          "  ts +1day                              # Add 1 day to current time"
         );
         console.log(
-          "  ts -2hours                  # Subtract 2 hours from current time"
+          "  ts -2hours                            # Subtract 2 hours from current time"
         );
-        console.log("  ts 1705123456 --output json # Output as JSON");
+        console.log("  ts 1705123456 --output json           # Output as JSON");
         console.log("");
         const now = Date.now();
         const currentDate = new Date(now);
@@ -1039,23 +1069,29 @@ try {
   } else {
     console.error(`Error: ${error.message}`);
     console.log(
-      '\nUsage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--output json] [--list-timezones]'
+      '\nUsage: ts <unix timestamp | ISO timestamp | "yyyy-MM-dd h:mma" | +/-<number><unit>> [--tz timezone] [--sourcetz timezone] [--output json] [--list-timezones]'
     );
     console.log("Examples:");
-    console.log("  ts                           # Show current time");
-    console.log("  ts 1705123456               # Convert Unix timestamp");
-    console.log("  ts 2024-01-13T10:30:00Z     # Convert ISO timestamp");
+    console.log("  ts                                    # Show current time");
+    console.log("  ts 1705123456                         # Convert Unix timestamp");
+    console.log("  ts 2024-01-13T10:30:00Z               # Convert ISO timestamp");
     console.log(
-      '  ts "2024-01-13 10:30am"     # Convert date string (local timezone)'
+      '  ts "2024-01-13 10:30am"               # Convert date string (local timezone)'
     );
-    console.log("  ts 1705123456 --tz UTC      # Convert with timezone");
-    console.log("  ts 1705123456 --tz pacific  # Use fuzzy timezone matching");
-    console.log("  ts 1705123456 --tz denver   # City names work too");
-    console.log("  ts +1day                     # Add 1 day to current time");
+    console.log("  ts 1705123456 --tz UTC                # Show timestamp in UTC");
+    console.log("  ts 1705123456 --tz pacific            # Use fuzzy timezone matching");
+    console.log('  ts "2024-01-13 10:30am" --sourcetz eastern  # Input time is Eastern, show in local timezone');
+    console.log('  ts "2024-01-13 10:30am" --sourcetz eastern --tz pacific  # Input is Eastern, show in Pacific');
+    console.log("  ts +1day                              # Add 1 day to current time");
     console.log(
-      "  ts -2hours                   # Subtract 2 hours from current time"
+      "  ts -2hours                            # Subtract 2 hours from current time"
     );
-    console.log("  ts 1705123456 --output json # Output as JSON");
-    console.log("  ts --list-timezones         # Show available timezones");
+    console.log("  ts 1705123456 --output json           # Output as JSON");
+    console.log("  ts --list-timezones                   # Show available timezones");
+    console.log("");
+    console.log("Flags:");
+    console.log("  --tz TIMEZONE       Display output in specified timezone");
+    console.log("  --sourcetz TIMEZONE Interpret input time as being in specified timezone");
+    console.log("                      (only applies to date strings like '2024-01-13 10:30am')");
   }
 }

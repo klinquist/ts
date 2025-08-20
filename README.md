@@ -65,16 +65,30 @@ ts "2018-01-05 10:05am"
 └─────────────────────────────────┴─────────────────────────────────────┘
 ```
 
-Date strings also support timezone specification:
+Date strings support timezone specification with separate flags for input and output timezones:
 
 ```
-ts "2018-01-05 10:05am" --tz America/New_York
+# Specify what timezone the input time is in using --sourcetz
+ts "2018-01-05 10:05am" --sourcetz America/New_York
 ┌─────────────────────────────────┬─────────────────────────────────────┐
 │ Format                          │ Value                               │
 ├─────────────────────────────────┼─────────────────────────────────────┤
+│ America/Los_Angeles             │ Jan 5, 2018, 07:05:00 AM            │
 │ Unix (seconds)                  │ 1515168300                          │
 │ Unix (milliseconds)             │ 1515168300000                       │
-│ UTC ISO timestamp               │ 2018-01-05T16:05:00.000Z            │
+│ UTC ISO timestamp               │ 2018-01-05T15:05:00.000Z            │
+│ Time difference                 │ 7 years, 6 months ago               │
+└─────────────────────────────────┴─────────────────────────────────────┘
+
+# Combine --sourcetz and --tz to specify both input and output timezones
+ts "2018-01-05 2:41pm" --sourcetz eastern --tz pacific
+┌─────────────────────────────────┬─────────────────────────────────────┐
+│ Format                          │ Value                               │
+├─────────────────────────────────┼─────────────────────────────────────┤
+│ America/Los_Angeles             │ Jan 5, 2018, 11:41:00 AM            │
+│ Unix (seconds)                  │ 1515177660                          │
+│ Unix (milliseconds)             │ 1515177660000                       │
+│ UTC ISO timestamp               │ 2018-01-05T19:41:00.000Z            │
 │ Time difference                 │ 7 years, 6 months ago               │
 └─────────────────────────────────┴─────────────────────────────────────┘
 ```
@@ -105,6 +119,11 @@ ts +1day
 - `+45seconds`, `-15seconds`
 
 ### Timezone Support
+
+The tool provides two separate timezone flags for maximum flexibility:
+
+- `--tz TIMEZONE`: Specify what timezone to display the output in
+- `--sourcetz TIMEZONE`: Specify what timezone the input time should be interpreted as (only applies to date strings like "2024-01-13 10:30am")
 
 Use `--tz` flag to specify output timezone. When specifying a different timezone, the tool automatically shows how many hours ahead or behind it is compared to your local timezone:
 
@@ -228,8 +247,11 @@ ts 1705123456 --tz tokyo --output json
 ts +1day
 ts -2hours --tz london
 
-# Date string with timezone
-ts "2024-01-13 10:30am" --tz America/New_York
+# Date string with source timezone (interprets input as Eastern time)
+ts "2024-01-13 10:30am" --sourcetz eastern
+
+# Date string with both source and output timezones
+ts "2024-01-13 2:41pm" --sourcetz eastern --tz pacific
 
 # List available timezones
 ts --list-timezones
