@@ -126,10 +126,18 @@ const parseRelativeTime = (input) => {
     case "y":
     case "year":
     case "years":
+      // Calculate exact days, accounting for leap years
+      let totalDays = 0;
+      const currentYear = now.getFullYear();
+
+      for (let i = 0; i < numAmount; i++) {
+        const targetYear = isAdd ? currentYear + i : currentYear - i - 1;
+        const isLeapYear = (targetYear % 4 === 0 && targetYear % 100 !== 0) || (targetYear % 400 === 0);
+        totalDays += isLeapYear ? 366 : 365;
+      }
+
       resultDate = new Date(
-        now.getFullYear() + (isAdd ? numAmount : -numAmount),
-        now.getMonth(),
-        now.getDate()
+        now.getTime() + (isAdd ? totalDays : -totalDays) * 24 * 60 * 60 * 1000
       );
       break;
     default:
