@@ -117,27 +117,45 @@ const parseRelativeTime = (input) => {
     case "m":
     case "month":
     case "months":
+      // Calculate exact days, accounting for month lengths
+      let monthTotalDays = 0;
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
+      for (let i = 0; i < numAmount; i++) {
+        let targetMonth, targetYear;
+        if (isAdd) {
+          targetMonth = (currentMonth + i) % 12;
+          targetYear = currentYear + Math.floor((currentMonth + i) / 12);
+        } else {
+          targetMonth = (currentMonth - i - 1 + 12) % 12;
+          targetYear = currentYear + Math.floor((currentMonth - i - 1) / 12);
+        }
+
+        // Get days in the target month
+        const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+        monthTotalDays += daysInMonth;
+      }
+
       resultDate = new Date(
-        now.getFullYear(),
-        now.getMonth() + (isAdd ? numAmount : -numAmount),
-        now.getDate()
+        now.getTime() + (isAdd ? monthTotalDays : -monthTotalDays) * 24 * 60 * 60 * 1000
       );
       break;
     case "y":
     case "year":
     case "years":
       // Calculate exact days, accounting for leap years
-      let totalDays = 0;
-      const currentYear = now.getFullYear();
+      let yearTotalDays = 0;
+      const baseYear = now.getFullYear();
 
       for (let i = 0; i < numAmount; i++) {
-        const targetYear = isAdd ? currentYear + i : currentYear - i - 1;
+        const targetYear = isAdd ? baseYear + i : baseYear - i - 1;
         const isLeapYear = (targetYear % 4 === 0 && targetYear % 100 !== 0) || (targetYear % 400 === 0);
-        totalDays += isLeapYear ? 366 : 365;
+        yearTotalDays += isLeapYear ? 366 : 365;
       }
 
       resultDate = new Date(
-        now.getTime() + (isAdd ? totalDays : -totalDays) * 24 * 60 * 60 * 1000
+        now.getTime() + (isAdd ? yearTotalDays : -yearTotalDays) * 24 * 60 * 60 * 1000
       );
       break;
     default:
